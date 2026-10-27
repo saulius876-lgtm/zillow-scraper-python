@@ -1,0 +1,3 @@
+# One street address, Zillow link or zpid per line
+2114 Bigelow Ave N, Seattle, WA 98109
+https://www.zillow.com/homedetails/48841077_zpid/
