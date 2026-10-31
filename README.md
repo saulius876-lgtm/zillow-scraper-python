@@ -1,14 +1,15 @@
 # Zillow scraper in Python: listings, sold homes and Zestimates to CSV
 
-Two small Python scripts that pull Zillow data without a Zillow API key, cookies or a browser:
+Three small Python scripts that pull Zillow data without a Zillow API key, cookies or a browser:
 
-- **`zillow_search.py`**: every home for sale, for rent or recently sold in a city, ZIP code,
+- **`zillow_search.py`**: homes for sale, for rent or recently sold in a city, ZIP code,
   neighborhood or county, with price, Zestimate, rent Zestimate, beds, baths, size and days on Zillow.
 - **`zestimates.py`**: the Zestimate, its low and high range, rent Zestimate, tax assessed value
   and last sale price for a list of street addresses, Zillow links or zpids.
+- **`zillow_monitor.py`**: new-to-monitor listings and observed price/status changes from repeated searches, saved to CSV. [Monitoring walkthrough](MONITORING.md).
 
 Zillow shut down its public API, and its website caps every search at about 820 homes and pushes back
-on repeated requests. Both scripts call the
+on repeated requests. The scripts call the
 [Zillow Scraper API](https://apify.com/sauliusautomatesit/zillow-scraper-api) on Apify, which handles
 the place lookup, paging, map splitting past the 820 cap and retries, and returns plain JSON.
 Disclosure: I build and maintain that Actor. It is pay per result (prices below), and you can cap
@@ -68,6 +69,18 @@ A place Zillow does not know comes back as a free error row instead of another c
 ```text
 no result for search "Nowhereville, ZZ": NOT_FOUND: no such place, property or address on Zillow
 ```
+
+## New listings and price changes on repeat runs
+
+```bash
+python zillow_monitor.py 78704 --max 20 --out first-run.csv
+python zillow_monitor.py 78704 --max 20 --out second-run.csv
+```
+
+The first run establishes a baseline; the second skips unchanged homes. Use `--mode price-drops`
+for observed price cuts (its first run returns no rows). The Actor keeps the baseline in your
+Apify account. Limits apply to homes checked, so a capped search is not complete market coverage.
+Read the [monitoring walkthrough](MONITORING.md) for scheduling, cost and coverage details.
 
 ## Zestimates for a list of addresses
 
@@ -132,16 +145,16 @@ apartment building units. The full input is on the
 
 ## What it costs
 
-Pay per result, no subscription. Prices on 27 Oct 2026, Apify free plan:
+Pay per result, no subscription. Prices checked 31 Oct 2026, Apify free plan:
 
 | Row | Price |
 |---|---|
 | Listing from a search | $0.0015 ($1.50 per 1,000) |
 | Property with full details (also each `--details` or `zestimates.py` row) | $0.002 ($2 per 1,000) |
-| Run start | $0.00005 |
+| Actor start | $0.00005 per GB of run memory (minimum one event) |
 
 Apify's paid plans pay 5% to 15% less. Places and addresses that give nothing come back as free
-error rows. Both scripts pass `--max-spend` (default $1) as a hard cap on each run.
+error rows. All three scripts pass `--max-spend` (default $1) as a hard cap on each run.
 
 ## Notes
 
