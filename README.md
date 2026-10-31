@@ -15,6 +15,16 @@ the place lookup, paging, map splitting past the 820 cap and retries, and return
 Disclosure: I build and maintain that Actor. It is pay per result (prices below), and you can cap
 what each run spends.
 
+## Choose an example
+
+| Task | Start here |
+|---|---|
+| Export homes for sale, rentals or sold listings | [Set up Python](#setup), then [search a ZIP code](#homes-for-sale-in-a-zip-code) |
+| Track new listings and observed price changes | [Monitoring walkthrough](MONITORING.md) and [runnable script](zillow_monitor.py) |
+| Look up Zestimates for known addresses | [Address lookup example](#zestimates-for-a-list-of-addresses) |
+| Check inputs or run in the browser | [Live Actor and input form](https://apify.com/sauliusautomatesit/zillow-scraper-api/input-schema) |
+| Understand charges and limits | [Pricing](#what-it-costs) and [monitoring coverage](MONITORING.md) |
+
 ## Setup
 
 ```bash
