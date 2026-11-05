@@ -4,6 +4,7 @@
 """
 import argparse
 import csv
+import json
 import os
 import sys
 
@@ -61,8 +62,21 @@ def main():
         item.setdefault("searchInput", item.get("input"))
         homes.append(item)
 
+    columns = COLUMNS
+    if args.details:
+        # Full property rows can include optional enrichment fields. Keep every field
+        # returned across the batch, after the original search columns.
+        columns = COLUMNS + sorted({key for home in homes for key in home} - set(COLUMNS))
+        homes = [
+            {
+                key: json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value
+                for key, value in home.items()
+            }
+            for home in homes
+        ]
+
     with open(args.out, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(homes)
 
@@ -73,3 +87,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

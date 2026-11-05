@@ -74,6 +74,12 @@ python zillow_search.py "Capitol Hill, Seattle, WA" "Ballard, Seattle, WA" --sta
 python zillow_search.py 98109 --details --max 50
 ```
 
+With `--details`, the CSV keeps every field returned for the batch, including the Zestimate
+range, description, agent information and facts when available. Extra columns vary with the
+fields returned for those properties. Nested objects and lists, such as `facts` and
+`priceHistory`, are stored as JSON in their cells; missing or null values are blank.
+Ordinary searches keep the search columns listed above.
+
 A place Zillow does not know comes back as a free error row instead of another city's homes:
 
 ```text
@@ -155,7 +161,7 @@ apartment building units. The full input is on the
 
 ## What it costs
 
-Pay per result, no subscription. Prices checked 31 Oct 2026, Apify free plan:
+Pay per result, no subscription. Prices checked 5 Nov 2026, Apify free plan:
 
 | Row | Price |
 |---|---|
@@ -173,3 +179,4 @@ privacy and fair housing laws that apply to you. Questions or a home the Actor g
 issue here or on the Actor's Issues tab.
 
 MIT licensed.
+
