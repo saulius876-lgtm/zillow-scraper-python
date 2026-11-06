@@ -86,6 +86,26 @@ The CSV includes `changeKind`, current and previous prices, the price difference
 
 The limit is the number of listings **checked**, not a guarantee of complete market coverage. A cap of 200 may miss changes on older homes outside the newest 200. An absent row does not prove a home sold or was removed; sale observations need a separate `--status sold` monitor. Empty results in price-drops mode are expected on the first run. The script reports input errors separately and exits with code 2 when they occur.
 
+## Decide whether a market check is complete
+
+Use the command's exit code and the companion `.run.json` receipt together. The receipt
+records `runId`, `datasetId`, `input`, `status`, `changeCount` and `errorCount`; it does
+not record the number of homes checked or the run's charge.
+
+| Result | Meaning | Next step |
+|---|---|---|
+| Exit 0, `status` is `SUCCEEDED`, `errorCount` is 0 | The export completed for that run's input. | Keep the CSV and receipt together; use a new filename for the next check. |
+| Exit 0, `changeCount` is 0 | No change rows were returned. A first price-drops run also returns zero while establishing its baseline. | Inspect the run in Console before interpreting coverage; an empty CSV does not establish that the whole market is unchanged. |
+| Exit 2, `errorCount` is greater than 0 | One or more inputs produced error rows. Other inputs may still have returned changes. | Read the command's input-problem messages and review the receipt's input before correcting the search. |
+| Exit 2, `status` is `FAILED`, `ABORTED` or `TIMED-OUT` | An explicit recovery exported partial results from an unsuccessful run. | Keep those rows marked partial and inspect the run in Console before the next check. |
+| Exit 1 | Completion is not confirmed; a CSV or receipt left on disk may be from an earlier export. | Keep the journal and follow [export recovery](#recover-an-interrupted-export) before starting another check. |
+
+For a recurring check, retain each successful CSV and receipt, and compare their `input`
+values so that changes in filters or scan limits do not get mistaken for market changes.
+Use the receipt's `runId` to inspect the run's actual charge in Console. A low row count
+alone does not measure scan coverage or cost. The maximum charge applies to each run;
+repeating successful checks starts additional runs.
+
 ## Cost
 
 The script requests search listings without full details. At the live free-plan rate checked 1 November 2026, emitted listings cost **$0.0015 each ($1.50 per 1,000)**. Unchanged homes are skipped without a listing charge. Actor start (`apify-actor-start`) is **$0.00005 per GB of run memory**, with a minimum of one start event; paid-plan discounts apply. The live checks and pricing are recorded in [VALIDATION.md](VALIDATION.md). Check the Actor's Pricing tab before scaling up.
