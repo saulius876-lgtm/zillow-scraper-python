@@ -46,13 +46,13 @@ def main():
     if run is None or run.status != "SUCCEEDED":
         sys.exit(f"Run did not succeed: {run.status if run else 'not found'}")
 
-    columns = COLUMNS + (["priceHistory", "taxHistory"] if args.history else [])
+    columns = COLUMNS + (["priceHistory", "taxHistory", "schools"] if args.history else [])
     found, missing = [], []
     for item in client.dataset(run.default_dataset_id).iterate_items():
         if item.get("type") == "error":
             missing.append(item)
             continue
-        for key in ("priceHistory", "taxHistory"):
+        for key in ("priceHistory", "taxHistory", "schools"):
             if item.get(key) is not None:
                 item[key] = json.dumps(item[key])
         found.append(item)

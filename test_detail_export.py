@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch
 
 import zillow_search
+import zestimates
 
 
 class DetailExportTests(unittest.TestCase):
@@ -153,6 +154,66 @@ class SearchStatusTests(unittest.TestCase):
         code, text = self.run_cli([{"zpid": "123"}], interrupted=True)
         self.assertIsInstance(code, ConnectionError)
         self.assertEqual(text, "previous complete export")
+
+
+
+class AddressHistoryTests(unittest.TestCase):
+    def export(self, rows, history=True):
+        class Client:
+            def actor(self, name):
+                self.actor_name = name
+                return self
+            def call(self, **kwargs):
+                self.call_args = kwargs
+                return types.SimpleNamespace(status="SUCCEEDED", default_dataset_id="fixture")
+            def dataset(self, dataset_id):
+                return self
+            def iterate_items(self):
+                yield from [dict(row) for row in rows]
+        client = Client()
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "addresses.txt"
+            source.write_text("123 Test St", encoding="utf-8")
+            output = Path(directory) / "homes.csv"
+            args = ["zestimates.py", str(source), "--out", str(output), "--max-spend", "0.01"]
+            if history:
+                args.append("--history")
+            with patch.object(zestimates, "ApifyClient", return_value=client), \
+                    patch.object(sys, "argv", args), \
+                    patch.dict(os.environ, {"APIFY_TOKEN": "offline-fixture"}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                zestimates.main()
+            with output.open(newline="", encoding="utf-8") as stream:
+                reader = csv.DictReader(stream)
+                return reader.fieldnames, list(reader), client
+
+    def test_school_and_existing_histories_survive_json_csv_roundtrip(self):
+        row = {"zpid": "123", "schools": [{"name": 'School, "École"\nNorth', "rating": 8,
+                                           "grades": ["K", "5"], "distance": 0.5}],
+               "priceHistory": [{"price": 100}], "taxHistory": [{"value": 90}]}
+        columns, rows, client = self.export([row])
+        self.assertEqual(columns, zestimates.COLUMNS + ["priceHistory", "taxHistory", "schools"])
+        for key in ("priceHistory", "taxHistory", "schools"):
+            self.assertEqual(json.loads(rows[0][key]), row[key])
+        self.assertTrue(client.call_args["run_input"]["includeHistory"])
+        self.assertEqual(client.call_args["max_total_charge_usd"], 0.01)
+
+    def test_absent_null_and_empty_school_data_remain_distinct(self):
+        _, rows, _ = self.export([{"zpid": "1"}, {"zpid": "2", "schools": None},
+                                  {"zpid": "3", "schools": []}])
+        self.assertEqual([row["schools"] for row in rows], ["", "", "[]"])
+
+    def test_default_export_keeps_original_columns(self):
+        columns, rows, client = self.export([{"zpid": "123", "schools": [{"name": "School"}]}], history=False)
+        self.assertEqual(columns, zestimates.COLUMNS)
+        self.assertNotIn("schools", rows[0])
+        self.assertFalse(client.call_args["run_input"]["includeHistory"])
+
+    def test_partial_lookup_retains_schools_for_successful_address(self):
+        _, rows, _ = self.export([{"type": "error", "error": "NOT_FOUND", "task": "bad address"},
+                                  {"type": "property", "zpid": "123", "schools": [{"name": "School"}]}])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(json.loads(rows[0]["schools"]), [{"name": "School"}])
 
 
 if __name__ == "__main__":
