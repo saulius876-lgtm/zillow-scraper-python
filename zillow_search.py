@@ -84,7 +84,9 @@ def main():
     for p in problems:
         print(f"no result for {p.get('task')}: {p.get('error')}")
 
+    return 2 if problems else 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
 

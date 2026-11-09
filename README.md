@@ -86,6 +86,11 @@ A place Zillow does not know comes back as a free error row instead of another c
 no result for search "Nowhereville, ZZ": NOT_FOUND: no such place, property or address on Zillow
 ```
 
+`zillow_search.py` exits with code **2** if any input returns an error row, including
+partial results. It still writes the CSV with every valid home and prints each error.
+Check the exit code before treating an automated export as complete. A successful
+search with zero homes and no error rows writes the header and exits with code **0**.
+
 ## New listings and price changes on repeat runs
 
 ```bash

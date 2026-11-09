@@ -97,5 +97,63 @@ class DetailExportTests(unittest.TestCase):
         self.assertFalse(client.call_args["run_input"]["includeDetails"])
 
 
+
+class SearchStatusTests(unittest.TestCase):
+    def run_cli(self, rows, status="SUCCEEDED", interrupted=False):
+        class Client:
+            def actor(self, name):
+                return self
+            def call(self, **kwargs):
+                return types.SimpleNamespace(status=status, default_dataset_id="fixture")
+            def dataset(self, dataset_id):
+                return self
+            def iterate_items(self):
+                yield from [dict(row) for row in rows]
+                if interrupted:
+                    raise ConnectionError("download interrupted")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "homes.csv"
+            output.write_text("previous complete export")
+            argv = ["zillow_search.py", "78704", "invalid", "--out", str(output)]
+            with patch.object(zillow_search, "ApifyClient", return_value=Client()), \
+                    patch.object(sys, "argv", argv), \
+                    patch.dict(os.environ, {"APIFY_TOKEN": "offline-fixture"}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    code = zillow_search.main()
+                except (SystemExit, ConnectionError) as exc:
+                    code = exc
+            return code, output.read_text()
+
+    def test_error_only_export_returns_two_and_replaces_previous_with_header(self):
+        code, text = self.run_cli([{"type": "error", "task": "invalid", "error": "NOT_FOUND"}])
+        self.assertEqual(code, 2)
+        self.assertEqual(len(list(csv.reader(io.StringIO(text)))), 1)
+        self.assertNotIn("previous complete export", text)
+
+    def test_partial_export_returns_two_and_keeps_valid_homes(self):
+        code, text = self.run_cli([{"type": "listing", "zpid": "123", "price": 500000},
+                                   {"type": "error", "task": "invalid", "error": "NOT_FOUND"}])
+        self.assertEqual(code, 2)
+        self.assertEqual(list(csv.DictReader(io.StringIO(text)))[0]["zpid"], "123")
+
+    def test_successful_empty_and_nonempty_results_return_zero(self):
+        for rows in [[], [{"type": "listing", "zpid": "123"}]]:
+            with self.subTest(rows=rows):
+                code, text = self.run_cli(rows)
+                self.assertEqual(code, 0)
+                self.assertEqual(len(list(csv.DictReader(io.StringIO(text)))), len(rows))
+
+    def test_failed_run_preserves_previous_export(self):
+        code, text = self.run_cli([], status="FAILED")
+        self.assertIsInstance(code, SystemExit)
+        self.assertEqual(text, "previous complete export")
+
+    def test_interrupted_download_preserves_previous_export(self):
+        code, text = self.run_cli([{"zpid": "123"}], interrupted=True)
+        self.assertIsInstance(code, ConnectionError)
+        self.assertEqual(text, "previous complete export")
+
+
 if __name__ == "__main__":
     unittest.main()
