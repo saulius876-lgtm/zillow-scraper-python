@@ -290,5 +290,74 @@ class AddressStatusTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
 
+
+
+class AddressInputProtectionTests(unittest.TestCase):
+    def check_paths(self, kind, rejected=True):
+        class Client:
+            calls = 0
+            def actor(self, name): return self
+            def call(self, **kwargs):
+                self.calls += 1
+                return types.SimpleNamespace(status="SUCCEEDED", default_dataset_id="fixture")
+            def dataset(self, dataset_id): return self
+            def iterate_items(self): yield {"type": "property", "zpid": "123"}
+        client = Client()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            source = folder / "addresses.txt"
+            original = "123 Test St\n"
+            source.write_text(original, encoding="utf-8")
+            output = source
+            if kind == "normalized":
+                (folder / "child").mkdir()
+                output = folder / "child" / ".." / "addresses.txt"
+            elif kind in {"symlink", "hardlink"}:
+                output = folder / "export.csv"
+                try:
+                    if kind == "symlink": output.symlink_to(source)
+                    else: os.link(source, output)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"Filesystem does not support {kind}: {exc}")
+            elif kind == "distinct":
+                (folder / "exports").mkdir()
+                output = folder / "exports" / "addresses.txt"
+                output.write_text("previous export", encoding="utf-8")
+            args = ["zestimates.py", str(source), "--out", str(output)]
+            with patch.object(zestimates, "ApifyClient", return_value=client) as factory, \
+                    patch.object(sys, "argv", args), \
+                    patch.dict(os.environ, {"APIFY_TOKEN": "offline-fixture"}), \
+                    contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr:
+                try: code = zestimates.main()
+                except SystemExit as exc: code = exc.code
+            self.assertEqual(source.read_text(encoding="utf-8"), original)
+            if rejected:
+                self.assertEqual(code, 2)
+                factory.assert_not_called()
+                self.assertEqual(client.calls, 0)
+                self.assertIn("input address file", stderr.getvalue())
+                self.assertEqual(output.read_text(encoding="utf-8"), original)
+            else:
+                self.assertEqual(code, 0)
+                self.assertEqual(client.calls, 1)
+                self.assertEqual(list(csv.DictReader(io.StringIO(output.read_text())))[0]["zpid"], "123")
+
+    def test_identical_input_and_output_are_rejected_before_client_creation(self):
+        self.check_paths("same")
+
+    def test_normalized_alias_is_rejected(self):
+        self.check_paths("normalized")
+
+    def test_symlink_alias_is_rejected_without_changing_input(self):
+        self.check_paths("symlink")
+
+    def test_hardlink_alias_is_rejected_without_changing_input(self):
+        self.check_paths("hardlink")
+
+    def test_distinct_output_with_same_basename_remains_supported(self):
+        self.check_paths("distinct", rejected=False)
+
+
 if __name__ == "__main__":
     unittest.main()

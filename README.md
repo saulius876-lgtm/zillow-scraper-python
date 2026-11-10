@@ -125,6 +125,10 @@ python zestimates.py addresses.txt --out zestimates.csv
 | 2114 Bigelow Ave N, Seattle, WA 98109 | 2137400 | 1923660 | 2372514 | 6182 | 2044000 | 995000 | 1924 |
 | https://www.zillow.com/homedetails/48841077_zpid/ | 1674700 | 1557471 | 1808676 | 6590 | 1218000 | 1675027 | 1914 |
 
+Choose an `--out` path separate from the input address list. The command rejects
+identical paths and filesystem links to the input before starting a run, so the
+address list remains available for the next batch.
+
 The address command exits with status `2` when the dataset contains input error rows,
 including partial results. It still saves valid properties, and an error-only result
 replaces the CSV with headers. Inspect the printed `not found:` lines before treating

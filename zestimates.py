@@ -28,6 +28,10 @@ def main():
     parser.add_argument("--max-spend", type=float, default=1.0, help="hard spending cap for the run in USD (default 1)")
     args = parser.parse_args()
 
+    if os.path.realpath(args.file) == os.path.realpath(args.out) or (
+            os.path.exists(args.out) and os.path.samefile(args.file, args.out)):
+        parser.error("--out must differ from the input address file, including links.")
+
     token = os.environ.get("APIFY_TOKEN")
     if not token:
         sys.exit("Set APIFY_TOKEN first (Apify Console > Settings > API & Integrations).")
