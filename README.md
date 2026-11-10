@@ -125,6 +125,11 @@ python zestimates.py addresses.txt --out zestimates.csv
 | 2114 Bigelow Ave N, Seattle, WA 98109 | 2137400 | 1923660 | 2372514 | 6182 | 2044000 | 995000 | 1924 |
 | https://www.zillow.com/homedetails/48841077_zpid/ | 1674700 | 1557471 | 1808676 | 6590 | 1218000 | 1675027 | 1914 |
 
+The address command exits with status `2` when the dataset contains input error rows,
+including partial results. It still saves valid properties, and an error-only result
+replaces the CSV with headers. Inspect the printed `not found:` lines before treating
+the batch as complete. A successful dataset without error rows exits with status `0`.
+
 Add `--history` for each home's price history, tax history and schools when available,
 stored as JSON in the `priceHistory`, `taxHistory` and `schools` columns. Missing or null
 values are blank; an empty list is `[]`. The default address export keeps its original columns.

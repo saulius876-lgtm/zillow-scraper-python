@@ -66,6 +66,8 @@ def main():
     for m in missing:
         print(f"not found: {m.get('task')}: {m.get('error')}")
 
+    return 2 if missing else 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

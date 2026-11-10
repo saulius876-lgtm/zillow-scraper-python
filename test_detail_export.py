@@ -216,5 +216,79 @@ class AddressHistoryTests(unittest.TestCase):
         self.assertEqual(json.loads(rows[0]["schools"]), [{"name": "School"}])
 
 
+
+
+class AddressStatusTests(unittest.TestCase):
+    def run_cli(self, rows, status="SUCCEEDED", interrupted=False, entrypoint=False):
+        class Client:
+            def actor(self, name): return self
+            def call(self, **kwargs):
+                return types.SimpleNamespace(status=status, default_dataset_id="fixture")
+            def dataset(self, dataset_id): return self
+            def iterate_items(self):
+                yield from [dict(row) for row in rows]
+                if interrupted: raise ConnectionError("interrupted download")
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "addresses.txt"
+            source.write_text("123 Test St\ninvalid address\n", encoding="utf-8")
+            output = Path(directory) / "homes.csv"
+            output.write_text("previous complete export")
+            argv = ["zestimates.py", str(source), "--out", str(output), "--history"]
+            with patch.object(zestimates, "ApifyClient", return_value=Client()), \
+                    patch.object(sys, "argv", argv), \
+                    patch.dict(os.environ, {"APIFY_TOKEN": "offline-fixture"}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    if entrypoint:
+                        import runpy
+                        sdk = types.ModuleType("apify_client")
+                        sdk.ApifyClient = lambda token: Client()
+                        with patch.dict(sys.modules, {"apify_client": sdk}):
+                            runpy.run_path(zestimates.__file__, run_name="__main__")
+                        code = None
+                    else:
+                        code = zestimates.main()
+                except (SystemExit, ConnectionError) as exc:
+                    code = exc.code if isinstance(exc, SystemExit) else exc
+            return code, output.read_text()
+
+    def test_error_only_returns_two_and_replaces_stale_export_with_header(self):
+        code, text = self.run_cli([{"type": "error", "task": "invalid", "error": "NOT_FOUND"}])
+        self.assertEqual(code, 2)
+        self.assertEqual(len(list(csv.reader(io.StringIO(text)))), 1)
+        self.assertNotIn("previous complete export", text)
+
+    def test_partial_returns_two_preserving_property_and_histories(self):
+        row = {"type": "property", "zpid": "123", "priceHistory": [], "taxHistory": [{"value": 90}], "schools": []}
+        code, text = self.run_cli([row, {"type": "error", "task": "invalid", "error": "NOT_FOUND"}])
+        self.assertEqual(code, 2)
+        exported = list(csv.DictReader(io.StringIO(text)))
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["zpid"], "123")
+        for key in ("priceHistory", "taxHistory", "schools"):
+            self.assertEqual(json.loads(exported[0][key]), row[key])
+
+    def test_success_and_empty_dataset_return_zero(self):
+        for rows in [[], [{"type": "property", "zpid": "123"}]]:
+            with self.subTest(rows=rows):
+                code, text = self.run_cli(rows)
+                self.assertEqual(code, 0)
+                self.assertEqual(len(list(csv.DictReader(io.StringIO(text)))), len(rows))
+
+    def test_failed_run_preserves_previous_export(self):
+        code, text = self.run_cli([], status="FAILED")
+        self.assertIn("Run did not succeed", code)
+        self.assertEqual(text, "previous complete export")
+
+    def test_interrupted_download_preserves_previous_export(self):
+        code, text = self.run_cli([{"zpid": "123"}], interrupted=True)
+        self.assertIsInstance(code, ConnectionError)
+        self.assertEqual(text, "previous complete export")
+
+    def test_process_entrypoint_propagates_partial_exit_status(self):
+        code, _ = self.run_cli([{"type": "error", "error": "NOT_FOUND"}], entrypoint=True)
+        self.assertEqual(code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
